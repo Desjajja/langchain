@@ -111,8 +111,12 @@ class RWKV(LLM, BaseModel):
         try:
             from rwkv.model import RWKV as RWKVMODEL
             from rwkv.utils import PIPELINE
-
-            values["tokenizer"] = tokenizers.Tokenizer.from_file(values["tokens_path"])
+            if 'rwkv_vocab_v20230424' in values["tokens_path"]:
+                from langchain_community.utils.rwkv_tokenizer import TRIE_TOKENIZER
+                values["tokenizer"] =  TRIE_TOKENIZER(values["tokens_path"])
+                values["tokens_path"] = 'rwkv_vocab_v20230424'
+            else:   
+                values["tokenizer"] = tokenizers.Tokenizer.from_file(values["tokens_path"])
 
             rwkv_keys = cls._rwkv_param_names()
             model_kwargs = {k: v for k, v in values.items() if k in rwkv_keys}
@@ -167,11 +171,17 @@ class RWKV(LLM, BaseModel):
         if self.model_tokens[-1] in AVOID_REPEAT_TOKENS:
             out[self.model_tokens[-1]] = -999999999
         return out
+    
+    def encode(self, x):
+        if 'Tokenizer' in str(type(self.tokenizer)):
+            return self.tokenizer.encode(x).ids
+        else:
+            return self.tokenizer.encode(x)
 
     def rwkv_generate(self, prompt: str) -> str:
         self.model_state = None
         self.model_tokens = []
-        logits = self.run_rnn(self.tokenizer.encode(prompt).ids)
+        logits = self.run_rnn(self.encode(prompt))
         begin = len(self.model_tokens)
         out_last = begin
 
